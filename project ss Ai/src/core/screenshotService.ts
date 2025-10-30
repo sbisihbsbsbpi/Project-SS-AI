@@ -1,27 +1,29 @@
-import { chromium, firefox, webkit, Browser, Page } from 'playwright';
-import { ScreenshotOptions, ScreenshotResult } from '../types';
-import * as fs from 'fs';
-import * as path from 'path';
+import { chromium, firefox, webkit, Browser, Page } from "playwright";
+import { ScreenshotOptions, ScreenshotResult } from "../types";
+import * as fs from "fs";
+import * as path from "path";
 
 export class ScreenshotService {
   private browser: Browser | null = null;
-  private browserType: 'chromium' | 'firefox' | 'webkit' = 'chromium';
+  private browserType: "chromium" | "firefox" | "webkit" = "chromium";
 
   /**
    * Initialize the browser
    */
-  async initialize(browserType: 'chromium' | 'firefox' | 'webkit' = 'chromium'): Promise<void> {
+  async initialize(
+    browserType: "chromium" | "firefox" | "webkit" = "chromium"
+  ): Promise<void> {
     this.browserType = browserType;
-    
+
     const launcher = {
       chromium,
       firefox,
-      webkit
+      webkit,
     }[browserType];
 
     this.browser = await launcher.launch({
       headless: true,
-      args: ['--disable-blink-features=AutomationControlled']
+      args: ["--disable-blink-features=AutomationControlled"],
     });
 
     console.log(`✅ Browser initialized: ${browserType}`);
@@ -36,21 +38,19 @@ export class ScreenshotService {
 
     try {
       if (!this.browser) {
-        throw new Error('Browser not initialized. Call initialize() first.');
+        throw new Error("Browser not initialized. Call initialize() first.");
       }
 
-      // Create a new page
-      const page = await this.browser.newPage();
+      // Create a new context with user agent if specified
+      const context = await this.browser.newContext({
+        userAgent: options.userAgent,
+      });
+      const page = await context.newPage();
 
       try {
         // Set viewport if specified
         if (options.viewport) {
           await page.setViewportSize(options.viewport);
-        }
-
-        // Set user agent if specified
-        if (options.userAgent) {
-          await page.setUserAgent(options.userAgent);
         }
 
         // Set headers if specified
@@ -64,12 +64,12 @@ export class ScreenshotService {
         }
 
         // Navigate to URL
-        await page.goto(options.url, { waitUntil: 'networkidle' });
+        await page.goto(options.url, { waitUntil: "networkidle" });
 
         // Wait for selector if specified
         if (options.waitForSelector) {
           await page.waitForSelector(options.waitForSelector, {
-            timeout: options.waitForTimeout || 5000
+            timeout: options.waitForTimeout || 5000,
           });
         }
 
@@ -79,10 +79,10 @@ export class ScreenshotService {
         }
 
         // Take screenshot
-        const format = options.format || 'png';
+        const format = (options.format || "png") as "png" | "jpeg";
         const buffer = await page.screenshot({
           fullPage: options.fullPage !== false,
-          type: format as 'png' | 'jpeg' | 'webp'
+          type: format,
         });
 
         const duration = Date.now() - startTime;
@@ -92,19 +92,20 @@ export class ScreenshotService {
           url: options.url,
           buffer,
           duration,
-          timestamp
+          timestamp,
         };
       } finally {
         await page.close();
+        await context.close();
       }
     } catch (error) {
       const duration = Date.now() - startTime;
       return {
         success: false,
         url: options.url,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         duration,
-        timestamp
+        timestamp,
       };
     }
   }
@@ -114,7 +115,7 @@ export class ScreenshotService {
    */
   async saveScreenshot(
     options: ScreenshotOptions,
-    outputDir: string = './screenshots'
+    outputDir: string = "./screenshots"
   ): Promise<ScreenshotResult> {
     const result = await this.takeScreenshot(options);
 
@@ -125,9 +126,11 @@ export class ScreenshotService {
       }
 
       // Generate filename
-      const urlHash = Buffer.from(options.url).toString('base64').substring(0, 8);
+      const urlHash = Buffer.from(options.url)
+        .toString("base64")
+        .substring(0, 8);
       const timestamp = Date.now();
-      const format = options.format || 'png';
+      const format = options.format || "png";
       const filename = `screenshot-${urlHash}-${timestamp}.${format}`;
       const filePath = path.join(outputDir, filename);
 
@@ -146,7 +149,7 @@ export class ScreenshotService {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
-      console.log('✅ Browser closed');
+      console.log("✅ Browser closed");
     }
   }
 }

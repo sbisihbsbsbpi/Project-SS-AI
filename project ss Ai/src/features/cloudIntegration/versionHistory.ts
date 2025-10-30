@@ -3,22 +3,20 @@
  * Tracks file versions and enables rollback
  */
 
-import { v4 as uuid } from 'uuid';
-import { Logger } from '../../utils/logger';
+import { v4 as uuid } from "uuid";
+import { Logger } from "../../utils/logger";
 import {
   FileVersion,
-  VersionHistory,
+  VersionHistory as IVersionHistory,
   VersionDiff,
   Change,
-} from './types';
+} from "./types";
 
 export class VersionHistory {
-  
-  private histories: Map<string, VersionHistory> = new Map();
+  private histories: Map<string, IVersionHistory> = new Map();
 
   constructor() {
     Logger.initialize();
-    
   }
 
   /**
@@ -56,7 +54,7 @@ export class VersionHistory {
     }
 
     // Mark previous version as not current
-    history.versions.forEach(v => (v.isCurrentVersion = false));
+    history.versions.forEach((v) => (v.isCurrentVersion = false));
 
     history.versions.push(version);
     history.currentVersionId = versionId;
@@ -69,18 +67,21 @@ export class VersionHistory {
   /**
    * Get version history
    */
-  async getVersionHistory(fileId: string): Promise<VersionHistory | null> {
+  async getVersionHistory(fileId: string): Promise<IVersionHistory | null> {
     return this.histories.get(fileId) || null;
   }
 
   /**
    * Get specific version
    */
-  async getVersion(fileId: string, versionId: string): Promise<FileVersion | null> {
+  async getVersion(
+    fileId: string,
+    versionId: string
+  ): Promise<FileVersion | null> {
     const history = this.histories.get(fileId);
     if (!history) return null;
 
-    return history.versions.find(v => v.versionId === versionId) || null;
+    return history.versions.find((v) => v.versionId === versionId) || null;
   }
 
   /**
@@ -90,13 +91,18 @@ export class VersionHistory {
     const history = this.histories.get(fileId);
     if (!history) return [];
 
-    return history.versions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return history.versions.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
   }
 
   /**
    * Rollback to version
    */
-  async rollbackToVersion(fileId: string, versionId: string): Promise<FileVersion> {
+  async rollbackToVersion(
+    fileId: string,
+    versionId: string
+  ): Promise<FileVersion> {
     Logger.info(`Rolling back file ${fileId} to version ${versionId}`);
 
     const history = this.histories.get(fileId);
@@ -104,7 +110,7 @@ export class VersionHistory {
       throw new Error(`File ${fileId} not found`);
     }
 
-    const version = history.versions.find(v => v.versionId === versionId);
+    const version = history.versions.find((v) => v.versionId === versionId);
     if (!version) {
       throw new Error(`Version ${versionId} not found`);
     }
@@ -121,7 +127,7 @@ export class VersionHistory {
       isCurrentVersion: true,
     };
 
-    history.versions.forEach(v => (v.isCurrentVersion = false));
+    history.versions.forEach((v) => (v.isCurrentVersion = false));
     history.versions.push(newVersion);
     history.currentVersionId = newVersion.versionId;
 
@@ -144,11 +150,11 @@ export class VersionHistory {
       throw new Error(`File ${fileId} not found`);
     }
 
-    const version1 = history.versions.find(v => v.versionId === versionId1);
-    const version2 = history.versions.find(v => v.versionId === versionId2);
+    const version1 = history.versions.find((v) => v.versionId === versionId1);
+    const version2 = history.versions.find((v) => v.versionId === versionId2);
 
     if (!version1 || !version2) {
-      throw new Error('One or both versions not found');
+      throw new Error("One or both versions not found");
     }
 
     const changes: Change[] = [];
@@ -156,8 +162,8 @@ export class VersionHistory {
     // Compare size
     if (version1.size !== version2.size) {
       changes.push({
-        type: 'modified',
-        field: 'size',
+        type: "modified",
+        field: "size",
         oldValue: version1.size,
         newValue: version2.size,
       });
@@ -166,8 +172,8 @@ export class VersionHistory {
     // Compare description
     if (version1.changeDescription !== version2.changeDescription) {
       changes.push({
-        type: 'modified',
-        field: 'changeDescription',
+        type: "modified",
+        field: "changeDescription",
         oldValue: version1.changeDescription,
         newValue: version2.changeDescription,
       });
@@ -194,16 +200,18 @@ export class VersionHistory {
       throw new Error(`File ${fileId} not found`);
     }
 
-    const version = history.versions.find(v => v.versionId === versionId);
+    const version = history.versions.find((v) => v.versionId === versionId);
     if (!version) {
       throw new Error(`Version ${versionId} not found`);
     }
 
     if (version.isCurrentVersion) {
-      throw new Error('Cannot delete current version');
+      throw new Error("Cannot delete current version");
     }
 
-    history.versions = history.versions.filter(v => v.versionId !== versionId);
+    history.versions = history.versions.filter(
+      (v) => v.versionId !== versionId
+    );
 
     Logger.info(`Version deleted: ${versionId}`);
   }
@@ -236,4 +244,3 @@ export class VersionHistory {
     Logger.info(`Pruned versions for file ${fileId}`);
   }
 }
-
