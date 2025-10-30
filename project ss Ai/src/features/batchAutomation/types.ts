@@ -5,7 +5,7 @@
 // Workflow Types
 export interface WorkflowStep {
   id: string;
-  type: 'capture' | 'transform' | 'compare' | 'export';
+  type: "capture" | "transform" | "compare" | "export";
   name: string;
   description?: string;
   config: Record<string, any>;
@@ -29,7 +29,7 @@ export interface Workflow {
 export interface WorkflowExecution {
   id: string;
   workflowId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   startTime?: Date;
   endTime?: Date;
   progress: number;
@@ -41,7 +41,7 @@ export interface WorkflowExecution {
 export interface ExecutionResult {
   stepId: string;
   stepName: string;
-  status: 'success' | 'failed' | 'skipped';
+  status: "success" | "failed" | "skipped";
   duration: number;
   output?: any;
   error?: string;
@@ -52,7 +52,7 @@ export interface BatchJob {
   id: string;
   workflowId: string;
   items: BatchItem[];
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
@@ -65,14 +65,14 @@ export interface BatchItem {
   id: string;
   url: string;
   metadata?: Record<string, any>;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed";
   result?: any;
   error?: string;
 }
 
 export interface BatchResult {
   itemId: string;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   output?: any;
   error?: string;
   duration: number;
@@ -80,12 +80,12 @@ export interface BatchResult {
 
 // Transformation Types
 export interface TransformationConfig {
-  type: 'crop' | 'resize' | 'filter' | 'rotate' | 'compress';
+  type: "crop" | "resize" | "filter" | "rotate" | "compress";
   options: Record<string, any>;
 }
 
 export interface CropConfig extends TransformationConfig {
-  type: 'crop';
+  type: "crop";
   options: {
     x: number;
     y: number;
@@ -95,18 +95,24 @@ export interface CropConfig extends TransformationConfig {
 }
 
 export interface ResizeConfig extends TransformationConfig {
-  type: 'resize';
+  type: "resize";
   options: {
     width: number;
     height: number;
-    fit?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+    fit?: "cover" | "contain" | "fill" | "inside" | "outside";
   };
 }
 
 export interface FilterConfig extends TransformationConfig {
-  type: 'filter';
+  type: "filter";
   options: {
-    name: 'grayscale' | 'sepia' | 'blur' | 'sharpen' | 'brightness' | 'contrast';
+    name:
+      | "grayscale"
+      | "sepia"
+      | "blur"
+      | "sharpen"
+      | "brightness"
+      | "contrast";
     value?: number;
   };
 }
@@ -119,7 +125,7 @@ export interface BatchReport {
   summary: ReportSummary;
   items: ReportItem[];
   generatedAt: Date;
-  exportFormats: ('json' | 'pdf' | 'html' | 'csv')[];
+  exportFormats: ("json" | "pdf" | "html" | "csv")[];
 }
 
 export interface ReportSummary {
@@ -134,7 +140,7 @@ export interface ReportSummary {
 export interface ReportItem {
   itemId: string;
   url: string;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   duration: number;
   output?: any;
   error?: string;
@@ -142,7 +148,7 @@ export interface ReportItem {
 
 // Scheduling Types
 export interface ScheduleConfig {
-  type: 'once' | 'recurring';
+  type: "once" | "recurring";
   cronExpression?: string;
   timezone?: string;
   nextRun?: Date;
@@ -192,12 +198,25 @@ export interface IWorkflowBuilder {
   listWorkflows(): Promise<Workflow[]>;
 }
 
+export interface JobStats {
+  totalItems: number;
+  successCount: number;
+  failureCount: number;
+  successRate: number;
+  totalDuration: number;
+  averageDuration: number;
+  progress: number;
+}
+
 export interface IBatchProcessor {
   createJob(workflowId: string, items: BatchItem[]): BatchJob;
   processJob(job: BatchJob): Promise<void>;
   getJobStatus(jobId: string): Promise<BatchJob | null>;
   cancelJob(jobId: string): Promise<void>;
   getJobResults(jobId: string): Promise<BatchResult[]>;
+  getJobStats(jobId: string): JobStats | null;
+  cleanupJob(jobId: string): Promise<void>;
+  shutdown(): Promise<void>;
 }
 
 export interface ITransformationEngine {
@@ -217,9 +236,11 @@ export interface IReportGenerator {
 }
 
 export interface IScheduler {
-  scheduleJob(workflowId: string, schedule: ScheduleConfig): Promise<ScheduledJob>;
+  scheduleJob(
+    workflowId: string,
+    schedule: ScheduleConfig
+  ): Promise<ScheduledJob>;
   unscheduleJob(jobId: string): Promise<void>;
   getScheduledJobs(): Promise<ScheduledJob[]>;
   executeScheduledJob(jobId: string): Promise<WorkflowExecution>;
 }
-

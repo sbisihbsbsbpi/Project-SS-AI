@@ -3,22 +3,51 @@
  * Handles batch job processing with parallel execution and progress tracking
  */
 
-import { v4 as uuidv4 } from 'uuid';
-import { Logger } from '../../utils/logger';
+import { v4 as uuidv4 } from "uuid";
+import { Logger } from "../../utils/logger";
 import {
   BatchJob,
   BatchItem,
   BatchResult,
   IBatchProcessor,
-} from './types';
+  JobStats,
+} from "./types";
 
 export class BatchProcessor implements IBatchProcessor {
   private jobs: Map<string, BatchJob> = new Map();
   private activeJobs: Set<string> = new Set();
   private defaultParallelism: number = 3;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private readonly MAX_JOB_AGE = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly CLEANUP_INTERVAL = 60 * 60 * 1000; // Every hour
 
   constructor(parallelism: number = 3) {
     this.defaultParallelism = parallelism;
+    this.startAutoCleanup();
+  }
+
+  /**
+   * Start auto-cleanup of old jobs
+   */
+  private startAutoCleanup(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      let cleanedCount = 0;
+
+      for (const [jobId, job] of this.jobs.entries()) {
+        if (
+          job.completedAt &&
+          now - job.completedAt.getTime() > this.MAX_JOB_AGE
+        ) {
+          this.jobs.delete(jobId);
+          cleanedCount++;
+        }
+      }
+
+      if (cleanedCount > 0) {
+        Logger.debug(`Auto-cleaned ${cleanedCount} old jobs`);
+      }
+    }, this.CLEANUP_INTERVAL);
   }
 
   /**
@@ -29,7 +58,7 @@ export class BatchProcessor implements IBatchProcessor {
       id: uuidv4(),
       workflowId,
       items,
-      status: 'pending',
+      status: "pending",
       createdAt: new Date(),
       progress: 0,
       results: [],
@@ -52,7 +81,7 @@ export class BatchProcessor implements IBatchProcessor {
 
     try {
       this.activeJobs.add(job.id);
-      job.status = 'processing';
+      job.status = "processing";
       job.startedAt = new Date();
 
       Logger.info(`Starting batch job: ${job.id}`);
@@ -62,29 +91,31 @@ export class BatchProcessor implements IBatchProcessor {
       let processedCount = 0;
 
       for (const batch of batches) {
-        const batchPromises = batch.map(item =>
-          this.processItem(job, item).then(result => {
+        const batchPromises = batch.map((item) =>
+          this.processItem(job, item).then((result) => {
             processedCount++;
-            job.progress = Math.round((processedCount / job.items.length) * 100);
+            job.progress = Math.round(
+              (processedCount / job.items.length) * 100
+            );
             return result;
           })
         );
 
         const results = await Promise.allSettled(batchPromises);
         results.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
+          if (result.status === "fulfilled") {
             job.results.push(result.value);
           }
         });
       }
 
-      job.status = 'completed';
+      job.status = "completed";
       job.completedAt = new Date();
       job.progress = 100;
 
       Logger.info(`Completed batch job: ${job.id}`);
     } catch (error) {
-      job.status = 'failed';
+      job.status = "failed";
       job.completedAt = new Date();
       Logger.error(`Failed to process batch job ${job.id}`, error);
       throw error;
@@ -96,20 +127,23 @@ export class BatchProcessor implements IBatchProcessor {
   /**
    * Process a single item
    */
-  private async processItem(job: BatchJob, item: BatchItem): Promise<BatchResult> {
+  private async processItem(
+    job: BatchJob,
+    item: BatchItem
+  ): Promise<BatchResult> {
     const startTime = Date.now();
-    item.status = 'processing';
+    item.status = "processing";
 
     try {
       // Simulate processing (in real implementation, this would call actual processors)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      item.status = 'completed';
+      item.status = "completed";
       item.result = { processed: true, url: item.url };
 
       const result: BatchResult = {
         itemId: item.id,
-        status: 'success',
+        status: "success",
         output: item.result,
         duration: Date.now() - startTime,
       };
@@ -117,12 +151,12 @@ export class BatchProcessor implements IBatchProcessor {
       Logger.debug(`Processed item: ${item.id}`);
       return result;
     } catch (error) {
-      item.status = 'failed';
+      item.status = "failed";
       item.error = (error as Error).message;
 
       const result: BatchResult = {
         itemId: item.id,
-        status: 'failed',
+        status: "failed",
         error: (error as Error).message,
         duration: Date.now() - startTime,
       };
@@ -148,8 +182,8 @@ export class BatchProcessor implements IBatchProcessor {
       throw new Error(`Job ${jobId} not found`);
     }
 
-    if (job.status === 'processing') {
-      job.status = 'cancelled';
+    if (job.status === "processing") {
+      job.status = "cancelled";
       this.activeJobs.delete(jobId);
       Logger.info(`Cancelled batch job: ${jobId}`);
     }
@@ -181,14 +215,18 @@ export class BatchProcessor implements IBatchProcessor {
   /**
    * Get job statistics
    */
-  getJobStats(jobId: string): any {
+  getJobStats(jobId: string): JobStats | null {
     const job = this.jobs.get(jobId);
     if (!job) {
       return null;
     }
 
-    const successCount = job.results.filter(r => r.status === 'success').length;
-    const failureCount = job.results.filter(r => r.status === 'failed').length;
+    const successCount = job.results.filter(
+      (r) => r.status === "success"
+    ).length;
+    const failureCount = job.results.filter(
+      (r) => r.status === "failed"
+    ).length;
     const totalDuration = job.results.reduce((sum, r) => sum + r.duration, 0);
 
     return {
@@ -201,5 +239,34 @@ export class BatchProcessor implements IBatchProcessor {
       progress: job.progress,
     };
   }
-}
 
+  /**
+   * Manually cleanup a completed job
+   */
+  async cleanupJob(jobId: string): Promise<void> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job ${jobId} not found`);
+    }
+
+    if (job.status === "processing") {
+      throw new Error(`Cannot cleanup job in processing status`);
+    }
+
+    this.jobs.delete(jobId);
+    Logger.info(`Cleaned up job: ${jobId}`);
+  }
+
+  /**
+   * Shutdown processor and cleanup resources
+   */
+  async shutdown(): Promise<void> {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.jobs.clear();
+    this.activeJobs.clear();
+    Logger.info("BatchProcessor shutdown complete");
+  }
+}

@@ -3,15 +3,13 @@
  * Performs pixel-by-pixel comparison using pixelmatch
  */
 
-import pixelmatch from 'pixelmatch';
-import { PNG } from 'pngjs';
-import { Logger } from '../../utils/logger';
-import {
-  ComparisonResult,
-  ComparisonOptions,
-  IImageComparator,
-} from './types';
-import { v4 as uuidv4 } from 'uuid';
+import pixelmatch from "pixelmatch";
+import { PNG } from "pngjs";
+import { Logger } from "../../utils/logger";
+import { ComparisonResult, ComparisonOptions, IImageComparator } from "./types";
+import { v4 as uuidv4 } from "uuid";
+
+const MAX_IMAGE_SIZE = 100 * 1024 * 1024; // 100MB
 
 export class ImageComparator implements IImageComparator {
   private defaultOptions: ComparisonOptions = {
@@ -21,6 +19,35 @@ export class ImageComparator implements IImageComparator {
     aaColor: [255, 255, 0],
     diffColor: [255, 0, 0],
   };
+
+  /**
+   * Validate image buffer
+   */
+  private validateBuffer(buffer: Buffer, name: string): void {
+    if (!buffer) {
+      throw new Error(`${name} is null or undefined`);
+    }
+    if (buffer.length === 0) {
+      throw new Error(`${name} is empty`);
+    }
+    if (buffer.length > MAX_IMAGE_SIZE) {
+      throw new Error(
+        `${name} exceeds maximum size of ${MAX_IMAGE_SIZE / 1024 / 1024}MB`
+      );
+    }
+  }
+
+  /**
+   * Parse PNG image with validation
+   */
+  private parseImage(buffer: Buffer, name: string): PNG {
+    this.validateBuffer(buffer, name);
+    try {
+      return PNG.sync.read(buffer);
+    } catch (error) {
+      throw new Error(`Failed to parse ${name}: ${(error as Error).message}`);
+    }
+  }
 
   /**
    * Compare two images and return comparison result
@@ -33,9 +60,9 @@ export class ImageComparator implements IImageComparator {
     try {
       const opts = { ...this.defaultOptions, ...options };
 
-      // Parse PNG images
-      const baselineImage = PNG.sync.read(baselineBuffer);
-      const currentImage = PNG.sync.read(currentBuffer);
+      // Parse PNG images with validation
+      const baselineImage = this.parseImage(baselineBuffer, "Baseline image");
+      const currentImage = this.parseImage(currentBuffer, "Current image");
 
       // Validate dimensions
       if (
@@ -73,8 +100,8 @@ export class ImageComparator implements IImageComparator {
 
       const result: ComparisonResult = {
         id: uuidv4(),
-        baselineId: '',
-        currentImagePath: '',
+        baselineId: "",
+        currentImagePath: "",
         timestamp: new Date(),
         pixelDifferences,
         totalPixels,
@@ -83,7 +110,7 @@ export class ImageComparator implements IImageComparator {
         threshold: opts.threshold || 0.1,
       };
 
-      Logger.info('Image comparison completed', {
+      Logger.info("Image comparison completed", {
         pixelDifferences,
         percentageDifference: percentageDifference.toFixed(2),
         isSimilar,
@@ -91,7 +118,7 @@ export class ImageComparator implements IImageComparator {
 
       return result;
     } catch (error) {
-      Logger.error('Image comparison failed', error);
+      Logger.error("Image comparison failed", error);
       throw error;
     }
   }
@@ -108,10 +135,10 @@ export class ImageComparator implements IImageComparator {
     try {
       const opts = { ...this.defaultOptions, ...options };
 
-      // Parse images
-      const baselineImage = PNG.sync.read(baselineBuffer);
-      const currentImage = PNG.sync.read(currentBuffer);
-      const diffImage = PNG.sync.read(diffBuffer);
+      // Parse images with validation
+      const baselineImage = this.parseImage(baselineBuffer, "Baseline image");
+      const currentImage = this.parseImage(currentBuffer, "Current image");
+      const diffImage = this.parseImage(diffBuffer, "Diff image");
 
       // Perform comparison to populate diff image
       pixelmatch(
@@ -132,14 +159,14 @@ export class ImageComparator implements IImageComparator {
       // Encode diff image to PNG
       const pngBuffer = PNG.sync.write(diffImage);
 
-      Logger.info('Diff image generated', {
+      Logger.info("Diff image generated", {
         width: diffImage.width,
         height: diffImage.height,
       });
 
       return pngBuffer;
     } catch (error) {
-      Logger.error('Failed to generate diff image', error);
+      Logger.error("Failed to generate diff image", error);
       throw error;
     }
   }
@@ -155,8 +182,8 @@ export class ImageComparator implements IImageComparator {
     try {
       const opts = { ...this.defaultOptions, ...options };
 
-      const baselineImage = PNG.sync.read(baselineBuffer);
-      const currentImage = PNG.sync.read(currentBuffer);
+      const baselineImage = this.parseImage(baselineBuffer, "Baseline image");
+      const currentImage = this.parseImage(currentBuffer, "Current image");
 
       if (
         baselineImage.width !== currentImage.width ||
@@ -188,9 +215,8 @@ export class ImageComparator implements IImageComparator {
 
       return Math.max(0, Math.min(100, similarity));
     } catch (error) {
-      Logger.error('Failed to calculate similarity', error);
+      Logger.error("Failed to calculate similarity", error);
       return 0;
     }
   }
 }
-

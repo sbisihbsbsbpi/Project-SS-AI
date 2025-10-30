@@ -27,14 +27,14 @@ export interface AuthToken {
 }
 
 export interface AuthProvider {
-  name: 'google' | 'dropbox';
+  name: "google" | "dropbox";
   config: OAuthConfig;
   token?: AuthToken;
 }
 
 // Upload/Download Types
 export interface CloudProvider {
-  name: 's3' | 'google-drive' | 'dropbox';
+  name: "s3" | "google-drive" | "dropbox";
   config: Record<string, any>;
 }
 
@@ -44,12 +44,14 @@ export interface UploadConfig {
   fileName: string;
   metadata?: Record<string, any>;
   isPublic?: boolean;
+  timeout?: number; // Timeout in milliseconds
 }
 
 export interface DownloadConfig {
   provider: CloudProvider;
   fileId: string;
   savePath: string;
+  timeout?: number; // Timeout in milliseconds
 }
 
 export interface UploadResult {
@@ -81,7 +83,7 @@ export interface ShareLink {
   createdBy: string;
 }
 
-export type SharePermission = 'view' | 'comment' | 'edit';
+export type SharePermission = "view" | "comment" | "edit";
 
 export interface SharedFile {
   fileId: string;
@@ -139,7 +141,7 @@ export interface CollaborativeChange {
   id: string;
   fileId: string;
   userId: string;
-  type: 'annotation' | 'comment' | 'edit';
+  type: "annotation" | "comment" | "edit";
   data: any;
   timestamp: Date;
 }
@@ -170,7 +172,7 @@ export interface VersionDiff {
 }
 
 export interface Change {
-  type: 'added' | 'removed' | 'modified';
+  type: "added" | "removed" | "modified";
   field: string;
   oldValue?: any;
   newValue?: any;
@@ -180,15 +182,15 @@ export interface Change {
 export interface SyncConfig {
   enabled: boolean;
   interval: number; // milliseconds
-  conflictResolution: 'local' | 'remote' | 'manual';
+  conflictResolution: "local" | "remote" | "manual";
 }
 
 export interface SyncEvent {
   id: string;
-  type: 'upload' | 'download' | 'conflict' | 'sync-complete';
+  type: "upload" | "download" | "conflict" | "sync-complete";
   fileId: string;
   timestamp: Date;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  status: "pending" | "in-progress" | "completed" | "failed";
   error?: string;
 }
 
@@ -196,11 +198,10 @@ export interface SyncEvent {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'share' | 'comment' | 'mention' | 'version-update';
+  type: "share" | "comment" | "mention" | "version-update";
   title: string;
   message: string;
   data: any;
   read: boolean;
   createdAt: Date;
 }
-
