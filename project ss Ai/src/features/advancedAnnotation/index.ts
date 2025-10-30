@@ -216,4 +216,21 @@ export class AdvancedAnnotation {
     this.canvasDrawing.clearCanvas();
     this.layerManager.clearHistory();
   }
+
+  /**
+   * Cleanup resources
+   */
+  cleanup(): void {
+    this.clear();
+    this.layerManager.clearHistory();
+  }
+
+  /**
+   * Destroy the module and cleanup all resources
+   */
+  destroy(): void {
+    this.cleanup();
+    this.canvas = null;
+    this.state = null;
+  }
 }

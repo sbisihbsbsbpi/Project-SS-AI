@@ -51,6 +51,41 @@ export class IntelligentContentAnalysis {
   }
 
   /**
+   * Perform OCR extraction with error recovery
+   */
+  private async performOCRExtraction(
+    imageData: string | ArrayBuffer,
+    ocrOptions?: any
+  ): Promise<OCRResult[]> {
+    try {
+      return await this.ocrEngine.extractText(imageData, ocrOptions);
+    } catch (error) {
+      console.warn(
+        "OCR extraction failed, continuing without OCR results",
+        error
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Perform element detection with error recovery
+   */
+  private performElementDetection(
+    imageData: string | ArrayBuffer
+  ): DetectedElement[] {
+    try {
+      return this.elementDetector.detectElements(imageData);
+    } catch (error) {
+      console.warn(
+        "Element detection failed, continuing without detected elements",
+        error
+      );
+      return [];
+    }
+  }
+
+  /**
    * Analyze image content
    */
   async analyzeImage(
@@ -67,36 +102,17 @@ export class IntelligentContentAnalysis {
         options?.enableAccessibilityCheck !== false;
       const enableIssueDetection = options?.enableIssueDetection !== false;
 
-      // Extract text using OCR with error recovery
-      let ocrResults: OCRResult[] = [];
-      if (enableOCR) {
-        try {
-          ocrResults = await this.ocrEngine.extractText(
-            imageData,
-            options?.ocrOptions
-          );
-        } catch (error) {
-          console.warn(
-            "OCR extraction failed, continuing without OCR results",
-            error
-          );
-        }
-      }
+      // Parallel processing: OCR and element detection are independent
+      const [ocrResults, detectedElements] = await Promise.all([
+        enableOCR
+          ? this.performOCRExtraction(imageData, options?.ocrOptions)
+          : Promise.resolve([]),
+        enableElementDetection
+          ? this.performElementDetection(imageData)
+          : Promise.resolve([]),
+      ]);
 
-      // Detect elements with error recovery
-      let detectedElements: DetectedElement[] = [];
-      if (enableElementDetection) {
-        try {
-          detectedElements = this.elementDetector.detectElements(imageData);
-        } catch (error) {
-          console.warn(
-            "Element detection failed, continuing without detected elements",
-            error
-          );
-        }
-      }
-
-      // Check accessibility with error recovery
+      // Check accessibility with error recovery (depends on elements)
       let accessibilityCheck = null;
       if (enableAccessibilityCheck && detectedElements.length > 0) {
         try {
@@ -110,7 +126,7 @@ export class IntelligentContentAnalysis {
         }
       }
 
-      // Detect issues with error recovery
+      // Detect issues with error recovery (depends on elements)
       let issueDetection = null;
       if (enableIssueDetection && detectedElements.length > 0) {
         try {
@@ -259,6 +275,20 @@ export class IntelligentContentAnalysis {
       averageScore: avgScore,
       latestAnalysis: analyses[analyses.length - 1] || null,
     };
+  }
+
+  /**
+   * Cleanup resources and clear history
+   */
+  cleanup(): void {
+    this.analysisHistory.clear();
+  }
+
+  /**
+   * Destroy the module and cleanup all resources
+   */
+  destroy(): void {
+    this.cleanup();
   }
 }
 
