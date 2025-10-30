@@ -17,6 +17,8 @@ export class WebsiteMonitor {
   private captures: Map<string, ScreenshotCapture> = new Map();
   private intervals: Map<string, NodeJS.Timeout> = new Map();
   private config: MonitoringConfig;
+  private readonly MAX_SESSIONS = 500; // Prevent unbounded memory growth
+  private readonly MAX_CAPTURES_PER_SESSION = 1000;
 
   constructor(config: MonitoringConfig) {
     validateString(config.url, "url");

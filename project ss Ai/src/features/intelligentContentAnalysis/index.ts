@@ -3,21 +3,21 @@
  * Orchestrates OCR, element detection, accessibility checks, and issue detection
  */
 
-import { v4 as uuidv4 } from 'uuid';
-import { AppError, ErrorSeverity } from '../../utils/errorHandler';
-import { validateString } from '../../utils/validation';
-import { OCREngine } from './ocrEngine';
-import { ElementDetector } from './elementDetector';
-import { AccessibilityChecker } from './accessibilityChecker';
-import { IssueDetector } from './issueDetector';
-import { ReportGenerator } from './reportGenerator';
+import { v4 as uuidv4 } from "uuid";
+import { AppError, ErrorSeverity } from "../../utils/errorHandler";
+import { validateString } from "../../utils/validation";
+import { OCREngine } from "./ocrEngine";
+import { ElementDetector } from "./elementDetector";
+import { AccessibilityChecker } from "./accessibilityChecker";
+import { IssueDetector } from "./issueDetector";
+import { ReportGenerator } from "./reportGenerator";
 import {
   AnalysisReport,
   ContentAnalysisOptions,
   ReportExportOptions,
   OCRResult,
   DetectedElement,
-} from './types';
+} from "./types";
 
 export class IntelligentContentAnalysis {
   private ocrEngine: OCREngine;
@@ -26,6 +26,7 @@ export class IntelligentContentAnalysis {
   private issueDetector: IssueDetector;
   private reportGenerator: ReportGenerator;
   private analysisHistory: Map<string, AnalysisReport> = new Map();
+  private readonly MAX_HISTORY_SIZE = 1000; // Prevent unbounded memory growth
 
   constructor() {
     this.ocrEngine = new OCREngine();
@@ -33,6 +34,20 @@ export class IntelligentContentAnalysis {
     this.accessibilityChecker = new AccessibilityChecker();
     this.issueDetector = new IssueDetector();
     this.reportGenerator = new ReportGenerator();
+  }
+
+  /**
+   * Add report to history with LRU eviction
+   */
+  private addToHistory(report: AnalysisReport): void {
+    // Evict oldest entry if at capacity
+    if (this.analysisHistory.size >= this.MAX_HISTORY_SIZE) {
+      const firstKey = this.analysisHistory.keys().next().value;
+      if (firstKey) {
+        this.analysisHistory.delete(firstKey);
+      }
+    }
+    this.analysisHistory.set(report.id, report);
   }
 
   /**
@@ -44,35 +59,72 @@ export class IntelligentContentAnalysis {
     options?: ContentAnalysisOptions
   ): Promise<AnalysisReport> {
     try {
-      validateString(imageUrl, 'imageUrl');
+      validateString(imageUrl, "imageUrl");
 
       const enableOCR = options?.enableOCR !== false;
       const enableElementDetection = options?.enableElementDetection !== false;
-      const enableAccessibilityCheck = options?.enableAccessibilityCheck !== false;
+      const enableAccessibilityCheck =
+        options?.enableAccessibilityCheck !== false;
       const enableIssueDetection = options?.enableIssueDetection !== false;
 
-      // Extract text using OCR
+      // Extract text using OCR with error recovery
       let ocrResults: OCRResult[] = [];
       if (enableOCR) {
-        ocrResults = await this.ocrEngine.extractText(imageData, options?.ocrOptions);
+        try {
+          ocrResults = await this.ocrEngine.extractText(
+            imageData,
+            options?.ocrOptions
+          );
+        } catch (error) {
+          console.warn(
+            "OCR extraction failed, continuing without OCR results",
+            error
+          );
+        }
       }
 
-      // Detect elements
+      // Detect elements with error recovery
       let detectedElements: DetectedElement[] = [];
       if (enableElementDetection) {
-        detectedElements = this.elementDetector.detectElements(imageData);
+        try {
+          detectedElements = this.elementDetector.detectElements(imageData);
+        } catch (error) {
+          console.warn(
+            "Element detection failed, continuing without detected elements",
+            error
+          );
+        }
       }
 
-      // Check accessibility
+      // Check accessibility with error recovery
       let accessibilityCheck = null;
       if (enableAccessibilityCheck && detectedElements.length > 0) {
-        accessibilityCheck = this.accessibilityChecker.checkAccessibility(detectedElements);
+        try {
+          accessibilityCheck =
+            this.accessibilityChecker.checkAccessibility(detectedElements);
+        } catch (error) {
+          console.warn(
+            "Accessibility check failed, continuing without accessibility results",
+            error
+          );
+        }
       }
 
-      // Detect issues
+      // Detect issues with error recovery
       let issueDetection = null;
       if (enableIssueDetection && detectedElements.length > 0) {
-        issueDetection = this.issueDetector.detectIssues(detectedElements, 800, 600);
+        try {
+          issueDetection = this.issueDetector.detectIssues(
+            detectedElements,
+            800,
+            600
+          );
+        } catch (error) {
+          console.warn(
+            "Issue detection failed, continuing without issue detection results",
+            error
+          );
+        }
       }
 
       // Generate report
@@ -84,13 +136,13 @@ export class IntelligentContentAnalysis {
         issueDetection
       );
 
-      // Store in history
-      this.analysisHistory.set(report.id, report);
+      // Store in history with LRU eviction
+      this.addToHistory(report);
 
       return report;
     } catch (error) {
       throw new AppError(
-        'CONTENT_ANALYSIS_FAILED',
+        "CONTENT_ANALYSIS_FAILED",
         `Failed to analyze image: ${(error as Error).message}`,
         ErrorSeverity.HIGH
       );
@@ -138,25 +190,25 @@ export class IntelligentContentAnalysis {
   exportReport(report: AnalysisReport, options: ReportExportOptions): string {
     try {
       switch (options.format) {
-        case 'json':
+        case "json":
           return this.reportGenerator.exportToJSON(report);
-        case 'html':
+        case "html":
           return this.reportGenerator.exportToHTML(report);
-        case 'csv':
+        case "csv":
           return this.reportGenerator.exportToCSV(report);
-        case 'pdf':
+        case "pdf":
           // PDF export would require additional library
           return this.reportGenerator.exportToHTML(report);
         default:
           throw new AppError(
-            'INVALID_EXPORT_FORMAT',
+            "INVALID_EXPORT_FORMAT",
             `Unsupported export format: ${options.format}`,
             ErrorSeverity.MEDIUM
           );
       }
     } catch (error) {
       throw new AppError(
-        'REPORT_EXPORT_FAILED',
+        "REPORT_EXPORT_FAILED",
         `Failed to export report: ${(error as Error).message}`,
         ErrorSeverity.HIGH
       );
@@ -194,9 +246,13 @@ export class IntelligentContentAnalysis {
    */
   getStatistics() {
     const analyses = this.getAllAnalyses();
-    const avgScore = analyses.length > 0
-      ? Math.round(analyses.reduce((sum, a) => sum + a.overallScore, 0) / analyses.length)
-      : 0;
+    const avgScore =
+      analyses.length > 0
+        ? Math.round(
+            analyses.reduce((sum, a) => sum + a.overallScore, 0) /
+              analyses.length
+          )
+        : 0;
 
     return {
       totalAnalyses: analyses.length,
@@ -206,6 +262,11 @@ export class IntelligentContentAnalysis {
   }
 }
 
-export { OCREngine, ElementDetector, AccessibilityChecker, IssueDetector, ReportGenerator };
-export * from './types';
-
+export {
+  OCREngine,
+  ElementDetector,
+  AccessibilityChecker,
+  IssueDetector,
+  ReportGenerator,
+};
+export * from "./types";
