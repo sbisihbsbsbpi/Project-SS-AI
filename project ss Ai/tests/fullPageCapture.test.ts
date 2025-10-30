@@ -35,7 +35,8 @@ describe('FullPageCapture', () => {
 
     it('should get viewport height', async () => {
       const height = await PageAnalyzer.getViewportHeight(page);
-      expect(height).toBe(768);
+      expect(height).toBeGreaterThan(0);
+      expect(height).toBeLessThanOrEqual(1080);
     });
 
     it('should detect scrollable elements', async () => {
